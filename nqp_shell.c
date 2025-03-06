@@ -28,7 +28,7 @@ char* parent_dir = NULL;
  * @return Array of strings, NULL-terminated.
  */
  char **split(const char *string, const char split_char , const int start, const int end) {
-    int length = strlen(string);
+    // int length = strlen(string);
 
     int num_words = 0;
 
@@ -198,7 +198,7 @@ void process_pwd_cmd(void){
 void process_simple_exec_cmd(const char* user_input, char** envp){
     // load the program from the img to memory
     // using memfd_create
-    char** split_arr = split(user_input, ' ');
+    char** split_arr = split(user_input, ' ', 0, strlen(user_input));
     if(split_arr == NULL){
         printf("Error: \"%s\", Invalid command\n", user_input);
     } else {
@@ -235,6 +235,54 @@ void process_simple_exec_cmd(const char* user_input, char** envp){
             }
         }
 
+    }
+}
+
+void process_red_exev_cmd(const char* user_input, char** envp, int red_index){
+    char** split_arr = split(user_input, '<', 0, strlen(user_input));
+    if(split_arr == NULL){
+        printf("Error: Invalid command\n");
+    } else {
+        // Assuming:
+        // split_arr[0] = will have cmd string with argument for exec
+        // split_arr[1] = will have the file name for redirection, also assuming this is only one file name
+        // split_arr[2] = NULL
+        
+        int pipefd[2];
+        int pipe_id = pipe(pipes);
+
+        pid_t child_id = fork();
+
+        if(child_id == 0){
+            // in child process
+            // exec the command
+            close(pipefd[1]); //close write end
+            char** cmd_argv = split(split_arr[0], ' ', 0, stelen(split_arr[0]));
+            int mem_fd = memfd_create(cmd_argv[0], 0);
+            if(mem_fd < 0){
+                printf("Error: Cannot create memory for \"%s\"\n", cmd_argv[0]);
+            } else {
+                int program_fd = nqp_open(cmd_argv[0]);
+                if (program_fd < 0){
+                    printf("Error: \"%s\", program not available in current directory\n", split_arr[0]);
+                } else {
+                    char read_buffer[256] = {0};
+                    ssize_t bytes_read = 0;
+
+                    while((bytes_read = nqp_read(program_fd, &read_buffer, 256)) > 0){
+                        write(mem_fd, &read_buffer, bytes_read);
+                    }
+
+                    dup2(pipefd[0], STDIN_FILENO); // set read end of pipe as stdin
+                    fexecve(mem_fd, cmd_argv, envp);
+                    perror("fexecve failed");
+                    // fprintf(stderr, "fexecve failed: %s\n", strerror(errno));
+                    printf("Error: Cannot execute the \"%s\" program\n", split_arr[0]);
+                }
+            }
+        } else {
+            // in parent process
+        }
     }
 }
 
