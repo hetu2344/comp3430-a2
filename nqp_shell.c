@@ -195,7 +195,7 @@ void process_pwd_cmd(void){
     printf("%s\n", curr_dir);
 }
 
-void process_exec_cmd(const char* user_input, char** envp){
+void process_simple_exec_cmd(const char* user_input, char** envp){
     // load the program from the img to memory
     // using memfd_create
     char** split_arr = split(user_input, ' ');
@@ -235,6 +235,16 @@ void process_exec_cmd(const char* user_input, char** envp){
             }
         }
 
+    }
+}
+
+void process_exec_cmd(const char* user_input, char** envp){
+    char* redirec_ptr = strchr(user_input, '<');
+
+    if (redirec_ptr != NULL){
+        
+    } else {
+        process_simple_exec_cmd(user_input, envp);
     }
 }
 
