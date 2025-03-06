@@ -21,19 +21,19 @@ char* curr_dir = NULL;
 char* parent_dir = NULL;
 
 /**
- * Splits a string into substrings based on a given delimiter.
+ * Splits a string into substrings based on a given delimiter, from start to end  (end not included)
  * 
  * @param string The input string.
  * @param split_char The delimiter character.
  * @return Array of strings, NULL-terminated.
  */
- char **split(const char *string, const char split_char /*, const int start, const inr end*/) {
+ char **split(const char *string, const char split_char , const int start, const int end) {
     int length = strlen(string);
 
     int num_words = 0;
 
     // Count occurrences of split_char to determine the number of words
-    for (int i = 0; i < length; i++) {
+    for (int i = start; i < end; i++) {
         if (string[i] == split_char) {
             num_words++;
         }
@@ -44,7 +44,8 @@ char* parent_dir = NULL;
     // Allocate space for array of words (+1 for NULL termination)
     char **split_ary = (char **)malloc((num_words + 1) * sizeof(char *));
 
-    char *copy = strdup(string);
+    char *copy = strndup(string, end - start);
+    copy[end] = '\0';
 
     char *word = strtok(copy, (char[]){split_char, '\0'});
 
