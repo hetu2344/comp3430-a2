@@ -243,14 +243,18 @@ void process_simple_exec_cmd(const char* user_input, char** envp){
                 if(child_id == 0){
                     // in child process,
                     // fexecve the program
+                    (void) envp;
                     fexecve(mem_fd, split_arr, envp);
                     perror("fexecve failed");
                     // fprintf(stderr, "fexecve failed: %s\n", strerror(errno));
                     printf("Error: Cannot execute the \"%s\" program\n", split_arr[0]);
+                    close(mem_fd);
+                    exit(0);
                 } else {
                     // in parent,
                     // wait for child process to exit                    
                     waitpid(child_id, NULL, 0);
+                    close(mem_fd);
                 }
             }
         }
@@ -312,16 +316,21 @@ void process_red_exev_cmd(const char* user_input, char** envp){
                             nqp_close(program_nqpfd);
 
                             dup2(input_memfd, STDIN_FILENO); // set read end of pipe as stdin
+                            (void) envp;
                             fexecve(cmd_memfd, cmd_argv, envp);
                             perror("fexecve failed");
+                            close(cmd_memfd);
+                            close(input_memfd);
                             // fprintf(stderr, "fexecve failed: %s\n", strerror(errno));
                             printf("Error: Cannot execute the \"%s\" program\n", split_arr[0]);
+                            exit(0);
                         }
                     }
                 } else {
                     // in parent,
                     // wait for child process to exit                    
                     waitpid(child_id, NULL, 0);
+                    close(input_memfd);
                 }
             }
         }
