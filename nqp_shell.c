@@ -20,6 +20,24 @@
 char* curr_dir = NULL;
 char* parent_dir = NULL;
 
+// This method will remove the continuous space from front and end of the string
+char* trim(char* string){
+    int len = strlen(string);
+    char* temp = string + len - 1;
+    // remove space from end
+    while(*temp == ' '){
+        temp--;
+    }
+    *(++temp) = '\0';
+
+    // remove space from starting
+    while(*string == ' '){
+        string++;
+    }
+
+    return string;
+}
+
 /**
  * Splits a string into substrings based on a given delimiter, from start to end  (end not included)
  * 
@@ -58,6 +76,8 @@ char* parent_dir = NULL;
         split_ary[i] = (char *)malloc(strlen(word) + 1);
 
         strcpy(split_ary[i], word);
+
+        split_ary[i] = trim(split_ary[i]);
         word = strtok(NULL, (char[]){split_char, '\0'}); // Get next token
     }
 
@@ -238,7 +258,7 @@ void process_simple_exec_cmd(const char* user_input, char** envp){
     }
 }
 
-void process_red_exev_cmd(const char* user_input, char** envp, int red_index){
+void process_red_exev_cmd(const char* user_input, char** envp){
     char** split_arr = split(user_input, '<', 0, strlen(user_input));
     if(split_arr == NULL){
         printf("Error: Invalid command\n");
@@ -247,41 +267,63 @@ void process_red_exev_cmd(const char* user_input, char** envp, int red_index){
         // split_arr[0] = will have cmd string with argument for exec
         // split_arr[1] = will have the file name for redirection, also assuming this is only one file name
         // split_arr[2] = NULL
+
+        // first read the input file from the img
+        int input_nqpfd = nqp_open(split_arr[1]);
+        int input_memfd;
         
-        int pipefd[2];
-        int pipe_id = pipe(pipes);
+        if(input_nqpfd < 0){
+            printf("Error: No such file \"%s\".\n", split_arr[1]);
+        } else {
+            input_memfd = memfd_create("input_file", 0);
 
-        pid_t child_id = fork();
-
-        if(child_id == 0){
-            // in child process
-            // exec the command
-            close(pipefd[1]); //close write end
-            char** cmd_argv = split(split_arr[0], ' ', 0, stelen(split_arr[0]));
-            int mem_fd = memfd_create(cmd_argv[0], 0);
-            if(mem_fd < 0){
-                printf("Error: Cannot create memory for \"%s\"\n", cmd_argv[0]);
+            if(input_memfd < 0){
+                printf("Error: Cannot create memory for \"%s\"\n", split_arr[1]);
             } else {
-                int program_fd = nqp_open(cmd_argv[0]);
-                if (program_fd < 0){
-                    printf("Error: \"%s\", program not available in current directory\n", split_arr[0]);
-                } else {
-                    char read_buffer[256] = {0};
-                    ssize_t bytes_read = 0;
+                char read_buffer[256] = {0};
+                ssize_t bytes_read = 0;
+    
+                while((bytes_read = nqp_read(input_nqpfd, &read_buffer, 256)) > 0){
+                    write(input_memfd, &read_buffer, bytes_read);
+                }
+                lseek(input_memfd, 0, SEEK_SET); // go to the start of the file
 
-                    while((bytes_read = nqp_read(program_fd, &read_buffer, 256)) > 0){
-                        write(mem_fd, &read_buffer, bytes_read);
+                nqp_close(input_nqpfd);
+
+                pid_t child_id = fork();
+
+                if(child_id == 0){
+                    char** cmd_argv = split(split_arr[0], ' ', 0, (int)strlen(split_arr[0]));
+                    int cmd_memfd = memfd_create(cmd_argv[0], 0);
+                    if(cmd_memfd < 0){
+                        printf("Error: Cannot create memory for \"%s\"\n", cmd_argv[0]);
+                    } else {
+                        int program_nqpfd = nqp_open(cmd_argv[0]);
+                        if (program_nqpfd < 0){
+                            printf("Error: \"%s\", program not available in current directory\n", split_arr[0]);
+                        } else {
+                            char read_buffer[256] = {0};
+                            ssize_t bytes_read = 0;
+
+                            while((bytes_read = nqp_read(program_nqpfd, &read_buffer, 256)) > 0){
+                                write(cmd_memfd, &read_buffer, bytes_read);
+                            }
+
+                            nqp_close(program_nqpfd);
+
+                            dup2(input_memfd, STDIN_FILENO); // set read end of pipe as stdin
+                            fexecve(cmd_memfd, cmd_argv, envp);
+                            perror("fexecve failed");
+                            // fprintf(stderr, "fexecve failed: %s\n", strerror(errno));
+                            printf("Error: Cannot execute the \"%s\" program\n", split_arr[0]);
+                        }
                     }
-
-                    dup2(pipefd[0], STDIN_FILENO); // set read end of pipe as stdin
-                    fexecve(mem_fd, cmd_argv, envp);
-                    perror("fexecve failed");
-                    // fprintf(stderr, "fexecve failed: %s\n", strerror(errno));
-                    printf("Error: Cannot execute the \"%s\" program\n", split_arr[0]);
+                } else {
+                    // in parent,
+                    // wait for child process to exit                    
+                    waitpid(child_id, NULL, 0);
                 }
             }
-        } else {
-            // in parent process
         }
     }
 }
@@ -290,7 +332,7 @@ void process_exec_cmd(const char* user_input, char** envp){
     char* redirec_ptr = strchr(user_input, '<');
 
     if (redirec_ptr != NULL){
-        
+        process_red_exev_cmd(user_input, envp);
     } else {
         process_simple_exec_cmd(user_input, envp);
     }
@@ -356,7 +398,7 @@ int main( int argc, char *argv[], char *envp[] )
     parent_dir = malloc(sizeof(char) * 2);
     strcpy(parent_dir, "/");
 
-    // char input[] = "echo \"Hi!\"\n";
+    // char input[] = "cat < hello.txt\n";
     // handle_cmd(input, envp);
     // return EXIT_SUCCESS;
 
