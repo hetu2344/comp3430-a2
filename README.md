@@ -1,14 +1,3 @@
----
-title: COMP 3430 Operating Systems
-subtitle: "Assignment 2: shell!"
-date: Winter 2025
----
-
-Overview
-========
-
-This directory contains the following:
-
 * This `README.md` file (you're reading it!).
 * A `Makefile` that can build the sample code.
 * A generic, POSIX-like interface for opening and reading files in a file system
@@ -58,11 +47,6 @@ To build with the arm version, you'll have to specify a variable when you run
 ```bash
 make NQP_EXFAT=nqp_exfat_arm.o
 ```
-
-[running an x86_64 version of Linux within Lima]: https://github.com/lima-vm/lima/discussions/1797
-
-Using your own implementation
------------------------------
 
 If you would like to use your own implementation of exFAT for `nqp_io.h`, you
 will need to implement one additional function. You are welcome to implement
